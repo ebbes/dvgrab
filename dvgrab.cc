@@ -76,7 +76,7 @@ DVgrab::DVgrab( int argc, char *argv[] ) :
 		m_lockstep_maxdrops( DEFAULT_LOCKSTEP_MAXDROPS ), m_lockstep_totaldrops( DEFAULT_LOCKSTEP_TOTALDROPS ),
 		m_captureActive( false ), m_avc( 0 ), m_reader( 0 ), m_hdv( false ), m_showstatus( false ),
 		m_isLastTimeCodeSet( false ), m_isLastRecDateSet( false ), m_v4l2( false ), m_jvc_p25( false ),
-		m_24p( false ), m_24pa( false ), m_isRecordMode( false ), m_isRewindFirst( false ),
+		m_24p( false ), m_24pa( false ), m_isRecordMode( false ), m_isRewindFirst( false ), m_isRewindAfter( false ),
 		m_timeSplit(0), m_srt( false ), m_isNewFile(false)
 {
 	m_frame = 0;
@@ -234,6 +234,7 @@ void DVgrab::print_help()
 	cerr << "                          'Type 2' DV AVI files (requires -format dv2)" << endl;
 	cerr << "  -r, recordonly       only capture when not paused while in record mode" << endl;
 	cerr << "  -rewind              completely rewind the tape prior to capture" << endl;
+	cerr << "  -rewindafter         completely rewind the tape after successful capture" << endl;
 	cerr << "  -showstatus          show the recording status while capturing" << endl;
 	cerr << "  -s, -size number     max file size, 0 = unlimited [default " << DEFAULT_SIZE << "]" << endl;
 	cerr << "  -srt                 write SRT files with the recording date\n";
@@ -350,6 +351,7 @@ void DVgrab::getargs( int argc, char *argv[] )
 		{ "opendml", no_argument, &m_open_dml, true },
 		{ "recordonly", no_argument, 0, 'r'},
 		{ "rewind", no_argument, &m_isRewindFirst, true },
+		{ "rewindafter", no_argument, &m_isRewindAfter, true },
 		{ "showstatus", no_argument, &m_showstatus, true },
 		{ "size", required_argument, &m_max_file_size, 0xff },
 		{ "srt", no_argument, &m_srt, true },
@@ -588,34 +590,7 @@ void DVgrab::startCapture()
 	{
 		if ( m_isRewindFirst && !m_interactive )
 		{
-			// Stop whatever is happening
-			m_avc->Stop( m_node );
-
-			// Wait until it is stopped
-			while ( !g_done &&
-				AVC1394_MASK_RESPONSE_OPERAND( m_avc->TransportStatus( m_node ), 3 )
-				!= AVC1394_VCR_OPERAND_WIND_STOP )
-			{
-				timespec t = {0, 125000000L};
-				nanosleep( &t, NULL );
-			}
-
-			// Rewind
-			if ( !g_done )
-			{
-				m_avc->Rewind( m_node );
-				timespec t = {0, 125000000L};
-				nanosleep( &t, NULL );
-			}
-
-			// Wait until is done rewinding
-			while ( !g_done &&
-			        AVC1394_MASK_RESPONSE_OPERAND( m_avc->TransportStatus( m_node ), 3 )
-			            != AVC1394_VCR_OPERAND_WIND_STOP )
-			{
-				timespec t = {0, 125000000L};
-				nanosleep( &t, NULL );
-			}
+			stopAndRewind();
 		}
 
 		// Now Play so we can capture something
@@ -705,6 +680,59 @@ void DVgrab::stopCapture()
 		m_captureActive = false;
 	}
 	pthread_mutex_unlock( &capture_mutex );
+}
+
+void DVgrab::rewindTape( void )
+{
+	pthread_mutex_lock( &capture_mutex );
+
+	if (m_isRewindAfter && m_avc && !m_interactive)
+	{
+		sendEvent( "Rewinding tape after capture" );
+
+		stopAndRewind();
+
+		sendEvent( "Done." );
+	}
+
+	pthread_mutex_unlock( &capture_mutex );
+}
+
+void DVgrab::stopAndRewind( void )
+{
+	if ( !m_avc )
+	{
+		return;
+	}
+
+	// Stop whatever is happening
+	m_avc->Stop( m_node );
+
+	// Wait until it is stopped
+	while ( !g_done &&
+		AVC1394_MASK_RESPONSE_OPERAND( m_avc->TransportStatus( m_node ), 3 )
+		!= AVC1394_VCR_OPERAND_WIND_STOP )
+	{
+		timespec t = {0, 125000000L};
+		nanosleep( &t, NULL );
+	}
+
+	// Rewind
+	if ( !g_done )
+	{
+		m_avc->Rewind( m_node );
+		timespec t = {0, 125000000L};
+		nanosleep( &t, NULL );
+	}
+
+	// Wait until is done rewinding
+	while ( !g_done &&
+			AVC1394_MASK_RESPONSE_OPERAND( m_avc->TransportStatus( m_node ), 3 )
+				!= AVC1394_VCR_OPERAND_WIND_STOP )
+	{
+		timespec t = {0, 125000000L};
+		nanosleep( &t, NULL );
+	}
 }
 
 

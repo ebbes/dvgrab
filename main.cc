@@ -94,6 +94,7 @@ int rt_raisepri (int pri)
 int main( int argc, char *argv[] )
 {
 	int ret = 0;
+	bool captureDone = false;
 
 	fcntl( fileno( stderr ), F_SETFL, O_NONBLOCK );
 	try
@@ -131,8 +132,16 @@ int main( int argc, char *argv[] )
 			dvgrab.startCapture();
 			while ( !g_done )
 				if ( dvgrab.done() )
+				{
+					captureDone = true;
 					break;
+				}
 			dvgrab.stopCapture();
+			if (captureDone)
+			{
+				// only rewind if capture was completed
+				dvgrab.rewindTape();
+			}
 		}
 	}
 	catch ( std::string s )

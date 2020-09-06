@@ -114,6 +114,7 @@ private:
 	bool m_isNewFile;
 	bool m_isRecordMode;
 	int m_isRewindFirst;
+	int m_isRewindAfter;
 
 	static FileHandler *m_writer;
 	bool m_captureActive;
@@ -138,6 +139,7 @@ public:
 	void getargs( int argc, char *argv[] );
 	void startCapture();
 	void stopCapture();
+	void rewindTape();
 	void status();
 	void watchdogThread();
 	void captureThreadRun();
@@ -156,6 +158,7 @@ private:
 	void sendFrameDroppedStatus( const char *reason, const char *meaning );
 	void writeFrame();
 	void cleanup();
+	void stopAndRewind();
 
 	void print_usage();
 	void print_help();
